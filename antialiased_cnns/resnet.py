@@ -1,93 +1,52 @@
-# This code is built from the PyTorch examples repository: https://github.com/pytorch/vision/tree/master/torchvision/models.
-# Copyright (c) 2017 Torch Contributors.
-# The Pytorch examples are available under the BSD 3-Clause License.
-#
-# ==========================================================================================
-#
-# Adobe’s modifications are Copyright 2019 Adobe. All rights reserved.
-# Adobe’s modifications are licensed under the Creative Commons Attribution-NonCommercial-ShareAlike
-# 4.0 International Public License (CC-NC-SA-4.0). To view a copy of the license, visit
-# https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.
-#
-# ==========================================================================================
-#
-# BSD-3 License
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-# * Redistributions of source code must retain the above copyright notice, this
-#   list of conditions and the following disclaimer.
-#
-# * Redistributions in binary form must reproduce the above copyright notice,
-#   this list of conditions and the following disclaimer in the documentation
-#   and/or other materials provided with the distribution.
-#
-# * Neither the name of the copyright holder nor the names of its
-#   contributors may be used to endorse or promote products derived from
-#   this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-
+import torch
+import torch.nn.parallel
+import numpy as np
 import torch.nn as nn
-import torch.utils.model_zoo as model_zoo
-from antialiased_cnns import *
+import torch.nn.functional as F
+from torch.utils import model_zoo
 
-__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
-           'resnext50_32x4d', 'resnext101_32x8d',
+from models_lpf import *
+#from .utils import load_state_dict_from_url
+from torch.hub import load_state_dict_from_url
+
+
+
+__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
+           'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
            'wide_resnet50_2', 'wide_resnet101_2']
 
 
 model_urls = {
-    'resnet18_lpf2': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet18_lpf2-6e2ee76f.pth',
-    'resnet18_lpf3': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet18_lpf3-449351b9.pth',
-    'resnet18_lpf4': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet18_lpf4-8c77af40.pth',
-    'resnet18_lpf5': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet18_lpf5-c1eed0a1.pth',
-    'resnet34_lpf2': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet34_lpf2-4707aed9.pth',
-    'resnet34_lpf3': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet34_lpf3-16aa6c48.pth',
-    'resnet34_lpf4': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet34_lpf4-55747267.pth',
-    'resnet34_lpf5': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet34_lpf5-85283561.pth',
-    'resnet50_lpf2': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet50_lpf2-f0f7589d.pth',
-    'resnet50_lpf3': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet50_lpf3-a4e868d2.pth',
-    'resnet50_lpf4': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet50_lpf4-994b528f.pth',
-    'resnet50_lpf5': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet50_lpf5-9953c9ad.pth',
-    'resnet101_lpf2': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet101_lpf2-3d00941d.pth',
-    'resnet101_lpf3': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet101_lpf3-928f1444.pth',
-    'resnet101_lpf4': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet101_lpf4-f8a116ff.pth',
-    'resnet101_lpf5': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet101_lpf5-1f3745af.pth',
-    'resnet18_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet18_lpf4_finetune-8cc58f59.pth',
-    'resnet34_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet34_lpf4_finetune-db622952.pth',
-    'resnet50_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet50_lpf4_finetune-cad66808.pth',
-    'resnet101_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet101_lpf4_finetune-9280acb0.pth',
-    'resnet152_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnet152_lpf4_finetune-7f67d9ae.pth',
-    'resnext50_32x4d_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnext50_32x4d_lpf4_finetune-9106e549.pth',
-    'resnext101_32x8d_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/resnext101_32x8d_lpf4_finetune-8f13a25d.pth',
-    'wide_resnet50_2_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/wide_resnet50_2_lpf4_finetune-02a183f7.pth',
-    'wide_resnet101_2_lpf4_finetune': 'https://antialiased-cnns.s3.us-east-2.amazonaws.com/weights_v0.1/wide_resnet101_2_lpf4_finetune-da4eae04.pth',
+    'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
+    'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
+    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
+    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
+    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
+    'resnext50_32x4d': 'https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth',
+    'resnext101_32x8d': 'https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth',
+    'wide_resnet50_2': 'https://download.pytorch.org/models/wide_resnet50_2-95faca4d.pth',
+    'wide_resnet101_2': 'https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth',
+    'resnet101_cycle1shift_allbefore_maxpool': 'C:/Users/ulku/checkpoint_130.pth.tar',
 }
+
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                 padding=dilation, groups=groups, bias=False, dilation=dilation)
+                     padding=dilation, groups=groups, bias=False, dilation=dilation)
+
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
+
 class BasicBlock(nn.Module):
     expansion = 1
+    __constants__ = ['downsample']
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1, 
-                 base_width=64, dilation=1, norm_layer=None, filter_size=1):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
+                 base_width=64, dilation=1, norm_layer=None):
         super(BasicBlock, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -96,14 +55,10 @@ class BasicBlock(nn.Module):
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv3x3(inplanes, planes)
+        self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = norm_layer(planes)
         self.relu = nn.ReLU(inplace=True)
-        if(stride==1):
-            self.conv2 = conv3x3(planes,planes)
-        else:
-            self.conv2 = nn.Sequential(BlurPool(planes, filt_size=filter_size, stride=stride),
-                conv3x3(planes, planes),)
+        self.conv2 = conv3x3(planes, planes)
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
@@ -129,23 +84,20 @@ class BasicBlock(nn.Module):
 
 class Bottleneck(nn.Module):
     expansion = 4
+    __constants__ = ['downsample']
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1, 
-                 base_width=64, dilation=1, norm_layer=None, filter_size=1):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
+                 base_width=64, dilation=1, norm_layer=None):
         super(Bottleneck, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         width = int(planes * (base_width / 64.)) * groups
+        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv1x1(inplanes, width)
         self.bn1 = norm_layer(width)
-        self.conv2 = conv3x3(width, width, groups=groups, dilation=dilation)  # Conv(stride2)-Norm-Relu --> #Conv-Norm-Relu-BlurPool(stride2)
+        self.conv2 = conv3x3(width, width, stride, groups, dilation)
         self.bn2 = norm_layer(width)
-        if(stride==1):
-            self.conv3 = conv1x1(width, planes * self.expansion)
-        else:
-            self.conv3 = nn.Sequential(BlurPool(width, filt_size=filter_size, stride=stride),
-                conv1x1(width, planes * self.expansion))
+        self.conv3 = conv1x1(width, planes * self.expansion)
         self.bn3 = norm_layer(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -177,8 +129,8 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
-                 groups=1, width_per_group=64, norm_layer=None, filter_size=1, pool_only=True,
-                 replace_stride_with_dilation=None):
+                 groups=1, width_per_group=64, replace_stride_with_dilation=None,
+                 norm_layer=None):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -193,38 +145,27 @@ class ResNet(nn.Module):
         if len(replace_stride_with_dilation) != 3:
             raise ValueError("replace_stride_with_dilation should be None "
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
-
         self.groups = groups
         self.base_width = width_per_group
-
-        if(pool_only):
-            self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
-            self.bn1 = norm_layer(self.inplanes)
-            self.relu = nn.ReLU(inplace=True)
-            self.maxpool = nn.Sequential(*[nn.MaxPool2d(kernel_size=2, stride=1), 
-                BlurPool(self.inplanes, filt_size=filter_size, stride=2,)])
-        else:
-            self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=1, padding=3, bias=False)
-            self.bn1 = norm_layer(self.inplanes)
-            self.relu = nn.ReLU(inplace=True)
-            self.maxpool = nn.Sequential(*[BlurPool(self.inplanes, filt_size=filter_size, stride=2,), 
-                nn.MaxPool2d(kernel_size=2, stride=1), 
-                BlurPool(self.inplanes, filt_size=filter_size, stride=2,)])
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
+                               bias=False)
+        self.bn1 = norm_layer(self.inplanes)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], filter_size=filter_size)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], filter_size=filter_size)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], filter_size=filter_size)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
+                                       dilate=replace_stride_with_dilation[0])
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2,
+                                       dilate=replace_stride_with_dilation[1])
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
+                                       dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
+        #print('fff')
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                if(m.in_channels!=m.out_channels or m.out_channels!=m.groups or m.bias is not None):
-                    # don't want to reinitialize downsample layers, code assuming normal conv layers will not have these characteristics
-                    nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                else:
-                    print('Not initializing')
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -233,41 +174,88 @@ class ResNet(nn.Module):
         # so that the residual branch starts with zeros, and each residual block behaves like an identity.
         # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
         if zero_init_residual:
+            print('zero_init_residual')
             for m in self.modules():
                 if isinstance(m, Bottleneck):
+                    print('bottleneck 111111111111')
                     nn.init.constant_(m.bn3.weight, 0)
                 elif isinstance(m, BasicBlock):
+                    print('BasicBlock 22222222222222222')
                     nn.init.constant_(m.bn2.weight, 0)
 
-    def _make_layer(self, block, planes, blocks, stride=1, filter_size=1, dilate=False):
+    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
+
         norm_layer = self._norm_layer
         downsample = None
         previous_dilation = self.dilation
         if dilate:
             self.dilation *= stride
             stride = 1
+
+
         if stride != 1 or self.inplanes != planes * block.expansion:
-            # since this is just a conv1x1 layer (no nonlinearity),
-            # conv1x1->blurpool is the same as blurpool->conv1x1; the latter is cheaper
-            downsample = [BlurPool(filt_size=filter_size, stride=stride, channels=self.inplanes),] if(stride !=1) else []
-            downsample += [conv1x1(self.inplanes, planes * block.expansion, 1),
-                norm_layer(planes * block.expansion)]
-            downsample = nn.Sequential(*downsample)
+                downsample = nn.Sequential(
+                conv1x1(self.inplanes, planes * block.expansion, stride),
+                norm_layer(planes * block.expansion),
+            )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, self.groups, 
-                            base_width=self.base_width, dilation=previous_dilation, 
-                            norm_layer=norm_layer, filter_size=filter_size))
+        layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
+                            self.base_width, previous_dilation, norm_layer))
         self.inplanes = planes * block.expansion
         for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, groups=self.groups, 
+            layers.append(block(self.inplanes, planes, groups=self.groups,
                                 base_width=self.base_width, dilation=self.dilation,
-                                norm_layer=norm_layer, filter_size=filter_size))
+                                norm_layer=norm_layer))
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        x = self.conv1(x)
+    def _forward(self, x):
+        # x = self.conv1(x)
+        # x = self.bn1(x)
+        # x = self.relu(x)
+        #x = self.maxpool(x)
+
+        all_shifts = [(0, 0, 0, 0),
+                      (1, 0, 0, 0),
+                      (1, 0, 1, 0),
+                      (0, 0, 1, 0),
+                      (1, 0, 0, 1),
+                      (0, 0, 0, 1),
+                      (0, 1, 0, 0),
+                      (0, 1, 1, 0),
+                      (0, 1, 0, 1)
+                      ]
+      
+        outputs = []
+        output0 = self.conv1(x)
+
+        outputs.append(output0)
+
+        for shift in all_shifts[1:]:
+            # (padding_left ,padding_right ,padding_top ,padding_bottom )
+            # torch.Size([35, 3, 224, 224])
+
+            m = nn.ZeroPad2d(shift)
+            output = m(x)
+
+            output = self.conv1(output)
+            #torch.Size([35, 64, 112, 112])
+            #print(output.size())
+            #print('******')
+            a = int (shift[2]/2)
+            b =int ( shift[3]/2)
+            c = int (shift[0]/2)
+            d = int (shift[1]/2)
+            output = output[:, :,
+                     0 + a: output.size()[2] + b,
+                     0 + c: output.size()[3] + d]
+            print(output.size())
+            outputs.append(output)
+
+        average = torch.mean(torch.stack(outputs), 0)
+
+        x = average
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
@@ -278,117 +266,135 @@ class ResNet(nn.Module):
         x = self.layer4(x)
 
         x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
+        x = torch.flatten(x, 1)
+
         x = self.fc(x)
+
 
         return x
 
 
-def resnet18(pretrained=False, filter_size=4, pool_only=True, _force_nonfinetuned=False, **kwargs):
-    """Constructs a ResNet-18 model.
+
+    # Allow for accessing forward method in a inherited class
+    forward = _forward
+
+
+def _resnet(arch, block, layers, pretrained, progress, **kwargs):
+
+    print('Eger weihts verilmis ise burada model olusur. arch kullanılmaz.')
+    model = ResNet(block, layers, **kwargs)
+
+    if pretrained:
+         print('pretrained bolumu')
+         state_dict = load_state_dict_from_url(model_urls[arch],
+                                                 progress=progress)
+         model.load_state_dict(state_dict)
+
+    return model
+
+
+def resnet18(pretrained=False, progress=True, **kwargs):
+    r"""ResNet-18 model from
+    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
-        filter_size (int): Antialiasing filter size
-        pool_only (bool): [True] don't antialias the first downsampling operation (which is costly to antialias)
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(BasicBlock, [2, 2, 2, 2], filter_size=filter_size, pool_only=pool_only, **kwargs)
-    if pretrained:
-        if(filter_size==4 and not _force_nonfinetuned):
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet18_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet18_lpf%i'%filter_size], map_location='cpu', check_hash=True)['state_dict'])
-    return model
+    return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress,
+                   **kwargs)
 
 
-def resnet34(pretrained=False, filter_size=4, pool_only=True, _force_nonfinetuned=False, **kwargs):
-    """Constructs a ResNet-34 model.
+
+def resnet34(pretrained=False, progress=True, **kwargs):
+    r"""ResNet-34 model from
+    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
-        filter_size (int): Antialiasing filter size
-        pool_only (bool): [True] don't antialias the first downsampling operation (which is costly to antialias)
-        _force_nonfinetuned (bool): [False] If True, load the trained-from scratch pretrained model (if available)
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(BasicBlock, [3, 4, 6, 3], filter_size=filter_size, pool_only=pool_only, **kwargs)
-    if pretrained:
-        if(filter_size==4 and not _force_nonfinetuned):
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet34_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet34_lpf%i'%filter_size], map_location='cpu', check_hash=True)['state_dict'])
-    return model
+    return _resnet('resnet34', BasicBlock, [3, 4, 6, 3], pretrained, progress,
+                   **kwargs)
 
 
-def resnet50(pretrained=False, filter_size=4, pool_only=True, _force_nonfinetuned=False, **kwargs):
-    """Constructs a ResNet-50 model.
+
+def resnet50(pretrained=False, progress=True, **kwargs):
+    r"""ResNet-50 model from
+    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
-        filter_size (int): Antialiasing filter size
-        pool_only (bool): [True] don't antialias the first downsampling operation (which is costly to antialias)
-        _force_nonfinetuned (bool): [False] If True, load the trained-from scratch pretrained model (if available)
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], filter_size=filter_size, pool_only=pool_only, **kwargs)
-    if pretrained:
-        if(filter_size==4 and not _force_nonfinetuned):
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet50_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet50_lpf%i'%filter_size], map_location='cpu', check_hash=True)['state_dict'])
-    return model
+    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress,
+                   **kwargs)
 
 
-def resnet101(pretrained=False, filter_size=4, pool_only=True, _force_nonfinetuned=False, **kwargs):
-    """Constructs a ResNet-101 model.
+
+#def resnet101(pretrained=False, progress=True, **kwargs):
+def resnet101(pretrained=False, **kwargs):
+    r"""ResNet-101 model from
+    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
-        filter_size (int): Antialiasing filter size
-        pool_only (bool): [True] don't antialias the first downsampling operation (which is costly to antialias)
-        _force_nonfinetuned (bool): [False] If True, load the trained-from scratch pretrained model (if available)
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(Bottleneck, [3, 4, 23, 3], filter_size=filter_size, pool_only=pool_only, **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 23, 3],  **kwargs)
     if pretrained:
-        if(filter_size==4 and not _force_nonfinetuned):
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet101_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet101_lpf%i'%filter_size], map_location='cpu', check_hash=True)['state_dict'])
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
     return model
+    # return _resnet('resnet101_cycle1shift_allbefore_maxpool', Bottleneck, [3, 4, 23, 3], pretrained, progress,
+    #                **kwargs)
 
 
-def resnet152(pretrained=False, filter_size=4, pool_only=True, _force_nonfinetuned=False, **kwargs):
-    """Constructs a ResNet-152 model.
+
+def resnet152(pretrained=False, progress=True, **kwargs):
+    r"""ResNet-152 model from
+    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+
     Args:
-        filter_size (int): Antialiasing filter size
-        pool_only (bool): [True] don't antialias the first downsampling operation (which is costly to antialias)
-        _force_nonfinetuned (bool): [False] If True, load the trained-from scratch pretrained model (if available)
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(Bottleneck, [3, 8, 36, 3], filter_size=filter_size, pool_only=pool_only, **kwargs)
-    if pretrained:
-        if(filter_size==4):
-            model.load_state_dict(model_zoo.load_url(model_urls['resnet152_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            raise ValueError('No pretrained model available')
-    return model
+    return _resnet('resnet152', Bottleneck, [3, 8, 36, 3], pretrained, progress,
+                   **kwargs)
 
 
-def resnext50_32x4d(pretrained=False, filter_size=4, pool_only=True, _force_nonfinetuned=False, **kwargs):
-    model = ResNet(Bottleneck, [3, 4, 6, 3], groups=32, width_per_group=4, filter_size=filter_size, pool_only=pool_only, **kwargs)
-    if pretrained:
-        if(filter_size==4):
-            model.load_state_dict(model_zoo.load_url(model_urls['resnext50_32x4d_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            raise ValueError('No pretrained model available')
-    return model
+
+def resnext50_32x4d(pretrained=False, progress=True, **kwargs):
+    r"""ResNeXt-50 32x4d model from
+    `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    kwargs['groups'] = 32
+    kwargs['width_per_group'] = 4
+    return _resnet('resnext50_32x4d', Bottleneck, [3, 4, 6, 3],
+                   pretrained, progress, **kwargs)
 
 
-def resnext101_32x8d(pretrained=False, filter_size=4, pool_only=True, _force_nonfinetuned=False, **kwargs):
-    model = ResNet(Bottleneck, [3, 4, 23, 3], groups=32, width_per_group=8, filter_size=filter_size, pool_only=pool_only, **kwargs)
-    if pretrained:
-        if(filter_size==4):
-            model.load_state_dict(model_zoo.load_url(model_urls['resnext101_32x8d_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            raise ValueError('No pretrained model available')
-    return model
+
+def resnext101_32x8d(pretrained=False, progress=True, **kwargs):
+    r"""ResNeXt-101 32x8d model from
+    `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    kwargs['groups'] = 32
+    kwargs['width_per_group'] = 8
+    return _resnet('resnext101_32x8d', Bottleneck, [3, 4, 23, 3],
+                   pretrained, progress, **kwargs)
 
 
-def wide_resnet50_2(pretrained=False, filter_size=4, _force_nonfinetuned=False, **kwargs):
-    """Wide ResNet-50-2 model from
+
+def wide_resnet50_2(pretrained=False, progress=True, **kwargs):
+    r"""Wide ResNet-50-2 model from
     `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
 
     The model is the same as ResNet except for the bottleneck number of channels
@@ -400,16 +406,14 @@ def wide_resnet50_2(pretrained=False, filter_size=4, _force_nonfinetuned=False, 
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], width_per_group=64*2, filter_size=filter_size, **kwargs)
-    if pretrained:
-        if(filter_size==4):
-            model.load_state_dict(model_zoo.load_url(model_urls['wide_resnet50_2_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            raise ValueError('No pretrained model available')
-    return model
+    kwargs['width_per_group'] = 64 * 2
+    return _resnet('wide_resnet50_2', Bottleneck, [3, 4, 6, 3],
+                   pretrained, progress, **kwargs)
 
-def wide_resnet101_2(pretrained=False, filter_size=4, _force_nonfinetuned=False, **kwargs):
-    """Wide ResNet-101-2 model from
+
+
+def wide_resnet101_2(pretrained=False, progress=True, **kwargs):
+    r"""Wide ResNet-101-2 model from
     `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
 
     The model is the same as ResNet except for the bottleneck number of channels
@@ -421,10 +425,7 @@ def wide_resnet101_2(pretrained=False, filter_size=4, _force_nonfinetuned=False,
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    model = ResNet(Bottleneck, [3, 4, 23, 3], width_per_group=64*2, filter_size=filter_size, **kwargs)
-    if pretrained:
-        if(filter_size==4):
-            model.load_state_dict(model_zoo.load_url(model_urls['wide_resnet101_2_lpf4_finetune'], map_location='cpu', check_hash=True)['state_dict'])
-        else:
-            raise ValueError('No pretrained model available')
-    return model
+    kwargs['width_per_group'] = 64 * 2
+    return _resnet('wide_resnet101_2', Bottleneck, [3, 4, 23, 3],
+                   pretrained, progress, **kwargs)
+
